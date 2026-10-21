@@ -5,19 +5,35 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.provider.Settings;
 import android.util.Log;
 import android.widget.Toast;
 
-/** Opt-in, once-per-full-boot launch. Never handles screen-on, HDMI or Home keys. */
+/**
+ * Once-per-full-boot entry. Xiaomi: opt-in launch through the stock launcher's start_3rd_app hook.
+ * Hisense: this app is the default Home, and its first Home launch after boot opens HDMI_PORT, so
+ * Back from that input lands on this home. Never handles screen-on or the Home key itself.
+ */
 public final class BootStart {
     private static final String PREFS = "boot-start";
     private static final String EXTRA = "guizang.boot-count";
+    /** The IPTV box. */
+    static final int HDMI_PORT = 2;
+    /** The input service can register after Home first starts, so a boot switch retries briefly. */
+    private static final int HDMI_TRIES = 8;
+    private static final long HDMI_RETRY_MS = 2500;
+    private static final Handler retry = new Handler(Looper.getMainLooper());
     private static SharedPreferences prefs(Context c) {
         return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
-    static boolean enabled(Context c) { return prefs(c).getBoolean("enabled", false); }
+    static boolean enabled(Context c) {
+        if (XiaomiControls.enabled()) return prefs(c).getBoolean("enabled", false);
+        return HisenseControls.enabled() && prefs(c).getBoolean("hdmi-enabled", true);
+    }
+    static String title() { return XiaomiControls.enabled() ? "开机自动进入" : "开机进入 HDMI " + HDMI_PORT; }
     private static int bootCount(Context c) {
         return Settings.Global.getInt(c.getContentResolver(), Settings.Global.BOOT_COUNT, -1);
     }
@@ -43,6 +59,25 @@ public final class BootStart {
         prefs(c).edit().putString("status", value).apply();
         Log.i("GuiZangBoot", value);
     }
+    /** Called with the Intent that created the home; only a HOME launch can switch inputs. */
+    static void fromHome(Activity a) {
+        Intent intent = a.getIntent();
+        if (XiaomiControls.enabled() || intent == null || !intent.hasCategory(Intent.CATEGORY_HOME)) return;
+        int boot = bootCount(a);
+        String reason = BootStartPolicy.skipReason(HisenseControls.enabled(), enabled(a), boot,
+                prefs(a).getInt("hdmi-attempted", -1), SystemClock.elapsedRealtime());
+        if (reason != null) { Log.i("GuiZangBoot", reason); return; }
+        if (!prefs(a).edit().putInt("hdmi-attempted", boot).commit()) return;
+        openHdmi(a, 1);
+    }
+    private static void openHdmi(Activity a, int attempt) {
+        if (a.isFinishing() || a.isDestroyed()) return;
+        if (TvControls.openHdmi(a, HDMI_PORT)) { status(a, "已在本次开机后进入 HDMI " + HDMI_PORT + "（第 " + attempt + " 次尝试）"); return; }
+        if (attempt >= HDMI_TRIES) { status(a, "开机切换 HDMI " + HDMI_PORT + " 失败，已停留在首页"); return; }
+        retry.postDelayed(() -> openHdmi(a, attempt + 1), HDMI_RETRY_MS);
+    }
+    /** The user left or picked something else; a late boot switch must not take the screen. */
+    static void cancel() { retry.removeCallbacksAndMessages(null); }
     static void confirm(Activity activity) {
         Intent intent = activity.getIntent();
         int boot = intent.getIntExtra(EXTRA, -1);
@@ -54,11 +89,26 @@ public final class BootStart {
     }
     static void settings(Activity a, Runnable systemSettings) {
         new AlertDialog.Builder(a).setTitle("设置")
-                .setItems(new String[]{"电视系统设置", "开机自动进入：" + (enabled(a) ? "已开启" : "已关闭")},
+                .setItems(new String[]{"电视系统设置", title() + "：" + (enabled(a) ? "已开启" : "已关闭")},
                         (d, i) -> { if (i == 0) systemSettings.run(); else show(a); })
                 .setNegativeButton("返回", null).show();
     }
     static void show(Activity a) {
+        if (HisenseControls.enabled() && !XiaomiControls.enabled()) {
+            String state = prefs(a).getString("status", "尚未进行完整重启测试");
+            new AlertDialog.Builder(a).setTitle(title())
+                    .setMessage("完整开机后，归藏电视作为默认桌面启动时会切到 HDMI " + HDMI_PORT + "。"
+                            + "在信号源中按返回，回到归藏电视首页。每次开机只切换一次。\n\n"
+                            + "默认桌面：" + (TvControls.isDefaultHome(a) ? "已是归藏电视" : "还不是，需电脑设置（docs/HISENSE.md）")
+                            + "\n上次状态：" + state)
+                    .setPositiveButton(enabled(a) ? "关闭" : "开启", (d, which) -> {
+                        boolean value = !enabled(a);
+                        prefs(a).edit().putBoolean("hdmi-enabled", value).apply();
+                        Toast.makeText(a, value ? "已开启，下次完整开机时进入 HDMI " + HDMI_PORT : "已关闭开机进入 HDMI " + HDMI_PORT, Toast.LENGTH_LONG).show();
+                    })
+                    .setNegativeButton("返回", null).show();
+            return;
+        }
         if (!XiaomiControls.enabled()) {
             new AlertDialog.Builder(a).setTitle("开机自动进入（实验）")
                     .setMessage("目前仅适配 MiTV-MTSU0。其他机型请先使用普通应用入口。")
@@ -80,6 +130,7 @@ public final class BootStart {
     static void dump(Context c, java.io.PrintWriter out) {
         out.println("BootStart: enabled=" + enabled(c) + " configured=" + configured(c)
                 + " boot=" + bootCount(c) + " attempted=" + prefs(c).getInt("attempted", -1)
+                + " hdmiAttempted=" + prefs(c).getInt("hdmi-attempted", -1)
                 + " status=" + prefs(c).getString("status", "none"));
     }
 }

@@ -4,7 +4,8 @@ android {
     namespace 'io.github.op7418.guizangtv'
     compileSdk 34
     defaultConfig {
-        applicationId 'io.github.op7418.guizangtv'
+        // Separate id so this Hisense fork installs beside the upstream release instead of replacing it.
+        applicationId 'io.github.sunsetwarrior.guizangtv'
         minSdk 26
         targetSdk 34
         versionCode 5

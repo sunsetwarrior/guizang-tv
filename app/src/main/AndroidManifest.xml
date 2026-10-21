@@ -8,6 +8,9 @@
         <package android:name="com.xiaomi.mitv.settings" />
         <package android:name="com.xiaomi.mitv.tvplayer" />
         <package android:name="com.mitv.tvhome" />
+        <!-- Stock launcher lookup and the Hisense source panel (TvControls / HisenseControls). -->
+        <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.HOME" /></intent>
+        <package android:name="com.hisense.tv.inputs" />
     </queries>
     <application android:label="@string/app_name" android:icon="@drawable/ic_launcher"
         android:banner="@drawable/banner" android:theme="@style/Theme.GuiZangTV"

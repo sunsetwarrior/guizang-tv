@@ -1,5 +1,7 @@
 # 归藏电视 · GuiZang TV
 
+> **本 fork：海信 75E3F（国内版）适配**，开机进入 HDMI 2（IPTV），返回回到首页。见 [docs/HISENSE.md](docs/HISENSE.md)。
+
 一个给国内小米电视做的简洁桌面：大字、壁纸、常用应用，以及直接进入游戏机和 Apple TV 的入口。
 
 ![归藏电视界面示意](docs/preview.svg)
