@@ -41,7 +41,7 @@ public final class FrameHomeActivity extends Activity implements HomeSurface.Act
         weather=new HomeWeather(this,this::weatherChanged);
         settings=new HomeSettings(this);
         wallpapers.changed=()->{if(surface!=null)surface.wallpaper(wallpaperDrawable());};
-        setContentView(root);refreshHome();surface.focusApp();BootStart.fromHome(this);
+        setContentView(root);refreshHome();surface.focusApp();TvControls.prepare(this);
     }
     void refreshHome(){
         int restore=Math.max(0,Math.min(items.order.size()-1,selected));
@@ -85,7 +85,7 @@ public final class FrameHomeActivity extends Activity implements HomeSurface.Act
     }
     @Override protected void onResume(){super.onResume();resumed=true;BootStart.confirm(this);handler.removeCallbacks(tick);tick.run();updateRotation();}
     @Override protected void onNewIntent(Intent i){super.onNewIntent(i);setIntent(i);}
-    @Override protected void onPause(){resumed=false;BootStart.cancel();weather.active(false);handler.removeCallbacks(tick);wallpapers.pause();if(library!=null)library.dismiss();super.onPause();}
+    @Override protected void onPause(){resumed=false;weather.active(false);handler.removeCallbacks(tick);wallpapers.pause();if(library!=null)library.dismiss();super.onPause();}
     @Override protected void onDestroy(){settings.close();weather.destroy();wallpapers.destroy();handler.removeCallbacksAndMessages(null);super.onDestroy();}
     @Override public void onBackPressed(){if(surface.controls.contains(getCurrentFocus()))surface.focusApp();else if(XiaomiControls.enabled())stockHome();else if(!TvControls.isDefaultHome(this))super.onBackPressed();}
     @Override public void dump(String prefix,java.io.FileDescriptor fd,java.io.PrintWriter out,String[] args){

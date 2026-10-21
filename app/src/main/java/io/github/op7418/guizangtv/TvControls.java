@@ -22,6 +22,7 @@ final class TvControls {
 
     static boolean openHdmi(Context context, int port) {
         if (XiaomiControls.enabled()) return XiaomiControls.openHdmi(context, port);
+        if (HisenseControls.openHdmi(context, port)) return true;
         TvInputInfo input = hdmiInput(context, port);
         if (input == null) return false;
         try {
@@ -51,6 +52,11 @@ final class TvControls {
         for (TvInputInfo info : manager.getTvInputList())
             if (info.getType() == TvInputInfo.TYPE_HDMI && info.getParentId() == null) found.add(info);
         return found;
+    }
+
+    /** Vendor services that bind asynchronously; called early so the first HDMI pick finds them ready. */
+    static void prepare(Context context) {
+        HisenseControls.sources(context);
     }
 
     static boolean showInputs(Context context) {
@@ -114,5 +120,6 @@ final class TvControls {
                 + " stockHome=" + stockHome(context));
         for (TvInputInfo info : hdmiInputs(context))
             out.println("  hdmi id=" + info.getId() + " label=" + info.loadLabel(context));
+        if (HisenseControls.enabled()) HisenseControls.dump(context, out);
     }
 }

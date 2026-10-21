@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
+import java.lang.reflect.Proxy;
 import java.util.Locale;
 
 /**
@@ -22,9 +23,99 @@ final class HisenseControls {
     static final String[] CAST = {"com.ms.ucast.ucastapp", "com.hisense.multiscreen.screenhelper",
             "com.ms.weshare", "com.hisense.pcm.share", "com.xiaomi.mitv.smartshare"};
 
+    /** JuUI source ids: HDMI n is 1280 + n ("HDMI 1" = 1281, "HDMI 2/ARC" = 1282 on the 75E3F). */
+    private static final int HDMI_SOURCE_BASE = 1280;
+    private static final ComponentName LIVE_TV =
+            new ComponentName("com.jamdeo.tv.livetv", "com.jamdeo.tv.livetv.LiveTvActivity");
+    /** com.jamdeo.tv.SourceManager from the boot-classpath com.jamdeo.flow.jar; it binds asynchronously. */
+    private static Object sourceManager;
+    private static volatile boolean sourceReady;
+
     static boolean enabled() {
         return "hisense".equalsIgnoreCase(Build.MANUFACTURER) || "hisense".equalsIgnoreCase(Build.BRAND)
                 || Build.MODEL.toUpperCase(Locale.ROOT).contains("75E3F");
+    }
+
+    /**
+     * The 75E3F registers no TvInputManager inputs. Mirrors the stock source panel: the vendor
+     * SourceManager switches the input, then LiveTV shows it (switch_by_trans: already switched).
+     * False until the source service has bound, so callers retry or report.
+     */
+    static boolean openHdmi(Context context, int port) {
+        if (!enabled() || port < 1 || port > 4 || !sources(context)) return false;
+        try {
+            Object done = sourceManager.getClass().getMethod("setCurrentInputSource", int.class)
+                    .invoke(sourceManager, HDMI_SOURCE_BASE + port);
+            if (!Boolean.TRUE.equals(done)) return false;
+            context.startActivity(new Intent().setComponent(LIVE_TV).putExtra("switch_by_trans", true)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            return true;
+        } catch (ReflectiveOperationException | RuntimeException unavailable) {
+            android.util.Log.w("TvHome.Hisense", "HDMI " + port + " switch rejected", unavailable);
+            return false;
+        }
+    }
+
+    /** Starts binding the vendor source service; true once it is usable. */
+    static boolean sources(Context context) {
+        if (!enabled()) return false;
+        if (sourceManager != null) return sourceReady;
+        try {
+            Class<?> tv = Class.forName("com.jamdeo.tv.TvManager");
+            Object manager = tv.getMethod("getSourceManager", Context.class)
+                    .invoke(tv.getMethod("getInstance").invoke(null), context.getApplicationContext());
+            if (manager == null) return false;
+            Class<?> listener = Class.forName("com.jamdeo.tv.IManagerStateListener");
+            Object callback = Proxy.newProxyInstance(listener.getClassLoader(), new Class<?>[]{listener},
+                    (proxy, method, args) -> {
+                        switch (method.getName()) {
+                            case "onServiceAvailable": sourceReady = true; return null;
+                            case "onServiceUnavailable": sourceReady = false; return null;
+                            case "hashCode": return System.identityHashCode(proxy);
+                            case "equals": return proxy == args[0];
+                            case "toString": return "GuiZangSourceListener";
+                            default: return null;
+                        }
+                    });
+            manager.getClass().getMethod("addManagerStateListener", listener).invoke(manager, callback);
+            sourceManager = manager;
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError unavailable) {
+            android.util.Log.w("TvHome.Hisense", "Source service unavailable", unavailable);
+        }
+        return sourceReady;
+    }
+
+    static int hdmiSource(int port) { return HDMI_SOURCE_BASE + port; }
+
+    /** The firmware's 开机信号源 (TV settings); -1 until the source service is ready. */
+    static int startupSource(Context context) { return sourceInt(context, "getStartupInputSource"); }
+
+    /** Vendor display name such as "HDMI 2/ARC", or null when unknown. */
+    static String sourceName(Context context, int source) {
+        if (source < 0 || !sources(context)) return null;
+        try {
+            Object name = sourceManager.getClass().getMethod("getInputSourceName", int.class).invoke(sourceManager, source);
+            return name == null ? null : name.toString();
+        } catch (ReflectiveOperationException | RuntimeException unavailable) {
+            return null;
+        }
+    }
+
+    private static int sourceInt(Context context, String getter) {
+        if (!sources(context)) return -1;
+        try {
+            Object value = sourceManager.getClass().getMethod(getter).invoke(sourceManager);
+            return value instanceof Integer ? (Integer) value : -1;
+        } catch (ReflectiveOperationException | RuntimeException unavailable) {
+            android.util.Log.w("TvHome.Hisense", getter + " failed", unavailable);
+            return -1;
+        }
+    }
+
+    static void dump(Context context, java.io.PrintWriter out) {
+        out.println("  hisense sourceManager=" + (sourceManager != null) + " ready=" + sourceReady
+                + " current=" + sourceInt(context, "getCurrentInputSource") + " startup=" + startupSource(context)
+                + " (" + sourceName(context, startupSource(context)) + ")");
     }
 
     /** Vendor source panel; it performs the switch itself when an input is picked. */
