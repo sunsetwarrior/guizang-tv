@@ -8,14 +8,13 @@ import java.util.*;
 
 /** Stable app/source identities; removing an entry never uninstalls an app. */
 final class HomeItems {
-    static final String[] DEFAULTS = {"hdmi:2", "hdmi:1", "com.xiaodianshi.tv.yst"};
+    static final String DOUYU = "com.douyu.xl.douyutv";
     final Context context;
     final LinkedHashMap<String,String> names = new LinkedHashMap<>();
     final List<String> order = new ArrayList<>();
     HomeItems(Context c) {
         context = c;
-        String[] labels = {"IPTV", "PS5 / Switch", "哔哩哔哩"};
-        for (int i=0;i<DEFAULTS.length;i++) names.put(DEFAULTS[i], labels[i]);
+        List<String> defaults = defaults();
         discover();
         try {
             JSONArray data = new JSONArray(c.getSharedPreferences("home-items",0).getString("order","[]"));
@@ -24,7 +23,24 @@ final class HomeItems {
                 if (validId(id) && !order.contains(id)) order.add(id);
             }
         } catch (Exception ignored) { order.clear(); }
-        if (order.isEmpty()) order.addAll(Arrays.asList(DEFAULTS));
+        if (order.isEmpty()) order.addAll(defaults);
+    }
+    /** IPTV, the console port, then the apps this TV actually has; a missing app leaves no gap. */
+    private List<String> defaults() {
+        List<String> ids = new ArrayList<>();
+        add(ids, "hdmi:2", "IPTV");
+        add(ids, "hdmi:1", "PS5 / Switch");
+        if (launchable("com.xiaodianshi.tv.yst")) add(ids, "com.xiaodianshi.tv.yst", "哔哩哔哩");
+        for (String cast : HisenseControls.CAST) if (launchable(cast)) { add(ids, cast, "投屏"); break; }
+        if (launchable(DOUYU)) add(ids, DOUYU, "斗鱼直播");
+        String stock = TvControls.stockHomePackage(context);
+        if (stock != null) add(ids, stock, "原桌面");
+        return ids;
+    }
+    private void add(List<String> ids, String id, String label) { ids.add(id); names.put(id, label); }
+    private boolean launchable(String pkg) {
+        return context.getPackageManager().getLeanbackLaunchIntentForPackage(pkg) != null
+                || context.getPackageManager().getLaunchIntentForPackage(pkg) != null;
     }
     void discover() {
         for (String category : new String[]{Intent.CATEGORY_LEANBACK_LAUNCHER, Intent.CATEGORY_LAUNCHER}) {

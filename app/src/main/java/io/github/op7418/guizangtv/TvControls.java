@@ -82,6 +82,12 @@ final class TvControls {
         }
     }
 
+    static String stockHomePackage(Context context) {
+        if (XiaomiControls.enabled()) return "com.mitv.tvhome";
+        ComponentName home = stockHome(context);
+        return home == null ? null : home.getPackageName();
+    }
+
     /** Another enabled HOME activity, the vendor launcher first; null once it has been disabled. */
     private static ComponentName stockHome(Context context) {
         ComponentName fallback = null;

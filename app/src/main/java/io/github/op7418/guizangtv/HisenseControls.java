@@ -18,6 +18,9 @@ final class HisenseControls {
 
     /** Stock JuUI launcher on the Vidda set; the first candidate tried by startStockHome. */
     static final String STOCK_HOME = "com.jamdeo.tv.vod";
+    /** Casting apps kept on the Vidda set, in the order the home tries them; Xiaomi's comes last. */
+    static final String[] CAST = {"com.ms.ucast.ucastapp", "com.hisense.multiscreen.screenhelper",
+            "com.ms.weshare", "com.hisense.pcm.share", "com.xiaomi.mitv.smartshare"};
 
     static boolean enabled() {
         return "hisense".equalsIgnoreCase(Build.MANUFACTURER) || "hisense".equalsIgnoreCase(Build.BRAND)

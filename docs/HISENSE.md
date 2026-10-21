@@ -4,7 +4,8 @@
 
 1. **开机直接进入 HDMI 2**（IPTV 机顶盒）。
 2. 在 IPTV 画面按 **返回**，回到归藏电视首页；Home 键同样回到归藏电视。
-3. 首页默认三项：**IPTV（HDMI 2）**、**PS5 / Switch（HDMI 1）**、**哔哩哔哩**（云视听小电视，`com.xiaodianshi.tv.yst`）。
+3. 首页默认：**IPTV（HDMI 2）**、**PS5 / Switch（HDMI 1）**、**哔哩哔哩**、**投屏**、**斗鱼直播**、**原桌面**。
+   应用类入口只在电视上装了对应应用时出现，缺的不留空位。首次在设置里编辑首页后，以保存的顺序为准。
 
 包名为 `io.github.sunsetwarrior.guizangtv`，与上游正式版可以并存。
 
@@ -23,7 +24,7 @@
 | `TvControls.java` | 按机型分派：小米走 `XiaomiControls`，其他机型用标准 Android TV 接口（`TvInputManager` + `TvContract.buildChannelUriForPassthroughInput`）切 HDMI |
 | `HisenseControls.java` | 海信识别、信号源面板、原桌面包名 |
 | `BootStart.java` | `fromHome()`：海信开机进入 HDMI 2；`HDMI_PORT` 改端口 |
-| `HomeItems.java` | 首页默认项和名称 |
+| `HomeItems.java` | 首页默认项和名称；`defaults()` 按候选包名挑第一个已安装的 |
 
 ## 待在电视上确认的事项
 
@@ -35,6 +36,8 @@
 | HDMI 切换 | `TvInputManager` 中标签为 “HDMI 2” 的输入 | `dumpsys tv_input`；`dumpsys activity <包名>` 中的 `TvControls:` 段列出应用看到的 HDMI 输入 |
 | 信号源面板 | `com.hisense.tv.inputs/com.hisense.tv.InputsUIService`，action `com.hisense.tv.start_inputs` | `pm list packages`、`dumpsys package com.hisense.tv.inputs` |
 | 原桌面 | `com.jamdeo.tv.vod`，否则任意其他 HOME | `cmd package resolve-activity` |
+| 投屏 | `HisenseControls.CAST` 中第一个有启动入口的包（Vidda 上的 `com.ms.ucast.ucastapp` 等） | 电视上投屏应用的包名，见下方命令 |
+| 斗鱼直播 | `com.douyu.xl.douyutv`（斗鱼 TV 版） | 应用商店装的是否就是这个包 |
 | 返回键 | 海信 IPTV / 信号源播放器按返回是否结束自身 | 实机按键 |
 | 开机方式 | 依赖完整开机（`BOOT_COUNT` 变化） | 遥控器关机是**待机**还是**真关机**？若是快速待机，唤醒不会触发开机进入，需改为监听亮屏或使用电视自带“开机信号源”设置 |
 
@@ -52,7 +55,8 @@ adb shell getprop ro.product.brand
 adb shell getprop ro.build.version.release
 adb shell getprop ro.build.display.id
 adb shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME
-adb shell pm list packages | grep -i -E "hisense|jamdeo|vidaa|juhaokan|keylab|xiaodianshi"
+adb shell pm list packages | grep -i -E "hisense|jamdeo|vidaa|juhaokan|keylab|xiaodianshi|douyu|cast|share|screen"
+adb shell cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.LEANBACK_LAUNCHER
 adb shell dumpsys tv_input | head -80
 adb shell dumpsys package com.hisense.tv.inputs | grep -i -E "service|exported|permission" | head -20
 ```
@@ -81,7 +85,7 @@ adb shell cmd package set-home-activity io.github.sunsetwarrior.guizangtv/io.git
 adb shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME
 ```
 
-如果原桌面仍会抢回 Home，再禁用它（只禁用，不卸载）：
+如果原桌面仍会抢回 Home，再禁用它（只禁用，不卸载）。**禁用后首页的“原桌面”入口就打不开了**，能不禁用就不禁用：
 
 ```sh
 adb shell pm disable-user --user 0 com.jamdeo.tv.vod   # 以第 1 步看到的原桌面包名为准

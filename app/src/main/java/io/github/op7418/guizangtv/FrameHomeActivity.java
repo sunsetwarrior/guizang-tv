@@ -63,7 +63,7 @@ public final class FrameHomeActivity extends Activity implements HomeSurface.Act
     @Override public void selected(int index){selected=index;getSharedPreferences("frame-home",0).edit().putInt("selected",index).apply();}
     @Override public void open(String id){
         if(id.startsWith("hdmi:")){if(!TvControls.openHdmi(this,Integer.parseInt(id.substring(5))))message("暂时无法切换信号源");return;}
-        if("com.mitv.tvhome".equals(id)||HisenseControls.STOCK_HOME.equals(id)){stockHome();return;}
+        if(id.equals(TvControls.stockHomePackage(this))){stockHome();return;}
         Intent intent=getPackageManager().getLeanbackLaunchIntentForPackage(id);
         if(intent==null)intent=getPackageManager().getLaunchIntentForPackage(id);
         launch(intent,"应用暂时不可用");
